@@ -44,7 +44,7 @@ function App() {
 
   if (isPlaying) {
     return (
-      <div className={`min-h-screen ${GAME_THEME.colors.appBg} flex items-center justify-center p-8 ${GAME_THEME.colors.textMain} relative overflow-hidden transition-colors duration-500`}>
+      <div className={`h-screen md:min-h-screen ${GAME_THEME.colors.appBg} flex flex-col md:flex-row items-center justify-center p-0 md:p-8 ${GAME_THEME.colors.textMain} relative overflow-hidden transition-colors duration-500`}>
         <ShiftShift
           playerName={playerName || 'TUT'}
           onExit={() => {
@@ -71,7 +71,7 @@ function App() {
   }
 
   return (
-    <div className={`min-h-screen ${GAME_THEME.colors.appBg} flex items-center justify-center p-8 ${GAME_THEME.colors.textMain} font-sans transition-colors duration-500`}>
+    <div className={`min-h-screen ${GAME_THEME.colors.appBg} flex items-center justify-center p-4 md:p-8 ${GAME_THEME.colors.textMain} font-sans transition-colors duration-500`}>
       <div className="max-w-md w-full flex flex-col gap-8">
         <div className="text-center space-y-2">
           <h1 className={`text-6xl ${GAME_THEME.colors.textMain} tracking-tighter font-display`}>Shift / Shift</h1>
