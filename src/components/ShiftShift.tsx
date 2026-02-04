@@ -167,6 +167,7 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
 
         // 3. Wait 500ms then Trigger Col Animation
         setTimeout(() => {
+            setDraggingCol(3); // Hide cells during animation
             setScramblingState({ colAnim: 'down' });
         }, 500);
     };
@@ -178,7 +179,9 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
             return newG;
         });
         setGridVersion(v => v + 1);
+
         setScramblingState({});
+        setDraggingCol(null); // Reset visibility
 
         // Wait 1s then Show Fix Overlay
         setTimeout(() => {
@@ -281,12 +284,6 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
 
     // New Handler for Column Drag
     const handleColDragStart = (colIndex: number) => {
-        // block if in tutorial step that forbids this
-        if (tutorialStep && tutorialStep !== 'fix_col') return;
-
-        // Enforce SPECIFIC column if needed (Col 3)
-        if (tutorialStep === 'fix_col' && colIndex !== 3) return;
-
         setDraggingCol(colIndex);
     };
 
