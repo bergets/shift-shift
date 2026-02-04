@@ -430,8 +430,8 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
     if (grid.length === 0) return null;
 
     return (
-        <div className="flex flex-col items-center gap-8 animate-in fade-in zoom-in duration-500">
-            <div className="flex items-center justify-between w-full max-w-md mb-2">
+        <div className="flex flex-col items-center justify-center h-full gap-2 md:gap-8 animate-in fade-in zoom-in duration-500 w-full max-w-[100vw] overflow-hidden py-1 md:py-0">
+            <div className="flex items-center justify-between w-full max-w-md mb-2 px-6 md:px-0 scale-90 md:scale-100 origin-bottom">
                 <div className="text-center">
                     <div className={`text-xs font-bold ${GAME_THEME.colors.textDim} uppercase tracking-wider mb-1 font-display`}>Time</div>
                     <div className={`text-3xl font-black ${GAME_THEME.colors.textMain} font-mono tracking-tight ${GAME_THEME.colors.displayBg} px-4 py-2 ${GAME_THEME.layout.radius} border ${GAME_THEME.colors.displayBorder} shadow-inner`}>
@@ -440,13 +440,14 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
                 </div>
 
                 <div className="flex gap-2">
+                    {/* Desktop Peek Button */}
                     <button
                         onMouseDown={() => setIsPeeking(true)}
                         onMouseUp={() => setIsPeeking(false)}
                         onMouseLeave={() => setIsPeeking(false)}
                         onTouchStart={() => setIsPeeking(true)}
                         onTouchEnd={() => setIsPeeking(false)}
-                        className={`group relative px-4 py-3 ${GAME_THEME.colors.btnPeek} ${GAME_THEME.layout.radius} transition-all active:scale-95 flex flex-col items-center justify-center gap-1 border`}
+                        className={`hidden md:flex group relative px-4 py-3 ${GAME_THEME.colors.btnPeek} ${GAME_THEME.layout.radius} transition-all active:scale-95 flex-col items-center justify-center gap-1 border`}
                         title="Hold to Peek"
                     >
                         <Eye className="w-6 h-6" />
@@ -464,7 +465,7 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
                 </div>
             </div>
 
-            <div className={`flex flex-col gap-4 p-8 ${GAME_THEME.colors.panelBg} backdrop-blur-sm ${GAME_THEME.layout.radiusLg || 'rounded-3xl'} border ${GAME_THEME.colors.panelBorder} ${GAME_THEME.layout.shadowLg} relative`}>
+            <div className={`flex flex-col gap-4 p-4 md:p-8 ${GAME_THEME.colors.panelBg} backdrop-blur-sm ${GAME_THEME.layout.radiusLg || 'rounded-3xl'} border ${GAME_THEME.colors.panelBorder} ${GAME_THEME.layout.shadowLg} relative scale-[0.72] sm:scale-75 md:scale-100 origin-top -mb-32 sm:-mb-24 md:mb-0`}>
 
                 {/* Memorize Phase Indicator - Floats above the grid */}
                 {gamePhase === 'memorize' && !isTutorial && (
@@ -596,14 +597,27 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
                 )}
             </div>
 
-            <div className="flex flex-col items-center gap-2">
-                <div className={`${GAME_THEME.colors.textDim} text-sm font-medium flex items-center gap-2`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${GAME_THEME.colors.indicatorPulse} animate-pulse`} />
-                    Drag rows (Horz) or columns (Vert) to fix
+            {/* Mobile Peek Button - Below Board */}
+            <button
+                onMouseDown={() => setIsPeeking(true)}
+                onMouseUp={() => setIsPeeking(false)}
+                onMouseLeave={() => setIsPeeking(false)}
+                onTouchStart={() => setIsPeeking(true)}
+                onTouchEnd={() => setIsPeeking(false)}
+                className={`flex md:hidden w-full max-w-xs ${GAME_THEME.colors.btnPeek} ${GAME_THEME.layout.radius} py-5 mt-8 items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform z-50`}
+            >
+                <Eye className="w-6 h-6" />
+                <span className="text-sm font-bold uppercase tracking-wider">Hold to Peek</span>
+            </button>
+
+            <div className="flex flex-col items-center gap-1 mt-2 md:mt-0 opacity-60 md:opacity-100">
+                <div className={`${GAME_THEME.colors.textDim} text-[10px] md:text-sm font-medium flex items-center gap-2`}>
+                    <div className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full ${GAME_THEME.colors.indicatorPulse} animate-pulse`} />
+                    Drag rows or columns to fix
                 </div>
-                <div className={`${GAME_THEME.colors.textDim} text-sm font-medium flex items-center gap-2`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${GAME_THEME.colors.indicatorPulse} animate-pulse`} />
-                    Hold Space to Peek at the target schedule
+                <div className={`${GAME_THEME.colors.textDim} text-[10px] md:text-sm font-medium flex items-center gap-2 md:flex`}>
+                    <div className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full ${GAME_THEME.colors.indicatorPulse} animate-pulse`} />
+                    Hold Peek button or Space to check target
                 </div>
             </div>
 
