@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useDragControls } from 'framer-motion';
+import { useDragControls, motion, AnimatePresence } from 'framer-motion';
 import { Eye, RefreshCw } from 'lucide-react';
 import Row from './Row';
 import Column from './Column';
@@ -9,8 +9,33 @@ import TutorialOverlay from './TutorialOverlay';
 import GhostHand from './GhostHand';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-const ROWS = 4;
-const COLS = 5;
+// Level Configuration
+const MAX_LEVEL_GRID = 10;
+const START_GRID_SIZE = 3; // Start 3x3
+
+const generateLevelConfig = (level: number) => {
+    // Level 1-3: 3x3
+    // Level 4-6: 4x4
+    // etc.
+    const sizeIncrease = Math.floor((level - 1) / 3);
+    const size = Math.min(MAX_LEVEL_GRID, START_GRID_SIZE + sizeIncrease);
+
+    // Scramble steps: 5 + (level-1)*2
+    const scrambleSteps = 5 + (level - 1) * 2;
+
+    // Density: 0.4 + (level * 0.02) -> Max 0.7
+    // Level 1: 0.42
+    // Level 10: 0.6
+    const density = Math.min(0.7, 0.4 + (level * 0.02));
+
+    return {
+        rows: size,
+        cols: size,
+        scrambleSteps,
+        density
+    };
+};
+
 
 // Pure helper functions
 const generateInitials = () => {
@@ -18,9 +43,9 @@ const generateInitials = () => {
     return letters[Math.floor(Math.random() * letters.length)] + letters[Math.floor(Math.random() * letters.length)];
 };
 
-const generateGrid = () => {
-    return Array.from({ length: ROWS }, () =>
-        Array.from({ length: COLS }, () => (Math.random() > 0.5 ? 1 : 0))
+const generateGrid = (rows: number, cols: number, density: number) => {
+    return Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => (Math.random() < density ? 1 : 0))
     );
 };
 
@@ -37,6 +62,7 @@ const getShiftedRow = (row: number[], direction: 'left' | 'right') => {
 };
 
 const getShiftedColumn = (grid: number[][], colIndex: number, direction: 'up' | 'down') => {
+    const rows = grid.length;
     const newGrid = grid.map((row) => [...row]);
     const column = newGrid.map((row) => row[colIndex]);
 
@@ -48,7 +74,7 @@ const getShiftedColumn = (grid: number[][], colIndex: number, direction: 'up' | 
         column.push(first);
     }
 
-    for (let i = 0; i < ROWS; i++) {
+    for (let i = 0; i < rows; i++) {
         newGrid[i][colIndex] = column[i];
     }
     return newGrid;
@@ -61,17 +87,34 @@ const checkWin = (currentGrid: number[][], targetGrid: number[][]) => {
 
 interface ShiftShiftProps {
     playerName: string;
-    onExit: () => void;
+    onExit: (maxLevel: number) => void;
     isTutorial?: boolean;
+    initialLevel?: number;
+    sessionScore: number;
+    onLevelComplete?: (score: number) => void;
     onTutorialComplete?: () => void;
+    personalBest?: number;
 }
 
-export default function ShiftShift({ playerName, onExit, isTutorial = false, onTutorialComplete }: ShiftShiftProps) {
+export default function ShiftShift({
+    playerName,
+    onExit,
+    isTutorial = false,
+    onTutorialComplete,
+    initialLevel = 1,
+    sessionScore,
+    onLevelComplete,
+    personalBest
+}: ShiftShiftProps) {
+    const [currentLevel, setCurrentLevel] = useState(initialLevel);
     const [grid, setGrid] = useState<number[][]>([]);
     const [targetGrid, setTargetGrid] = useState<number[][]>([]);
     const [employees, setEmployees] = useState<string[]>([]);
-    const [gamePhase, setGamePhase] = useState<'memorize' | 'playing' | 'won'>('memorize');
-    const [score, setScore] = useState(0);
+    const [gamePhase, setGamePhase] = useState<'memorize' | 'playing' | 'level_complete' | 'won' | 'shift_over'>('memorize');
+
+    // Level Score (just for this level's victory screen)
+    const [levelScore, setLevelScore] = useState(0);
+
     const [moves, setMoves] = useState(0);
     const [seconds, setSeconds] = useState(0);
     const [isPeeking, setIsPeeking] = useState(false);
@@ -92,33 +135,51 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
     // Key Remount State
     const [gridVersion, setGridVersion] = useState(0);
 
-    // Create Drag Controls for Columns - MUST be top level.
+    // Score Animation State
+    const [displayScore, setDisplayScore] = useState(sessionScore);
+
+    // Animate Score
+    useEffect(() => {
+        if (displayScore < sessionScore) {
+            const diff = sessionScore - displayScore;
+            const step = Math.ceil(diff / 10);
+            const t = setTimeout(() => setDisplayScore(s => Math.min(sessionScore, s + step)), 50);
+            return () => clearTimeout(t);
+        } else if (displayScore > sessionScore) {
+            setDisplayScore(sessionScore);
+        }
+    }, [sessionScore, displayScore]);
+
+    // ... drag controls ...
     const colControl0 = useDragControls();
     const colControl1 = useDragControls();
     const colControl2 = useDragControls();
     const colControl3 = useDragControls();
     const colControl4 = useDragControls();
-    const colControls = [colControl0, colControl1, colControl2, colControl3, colControl4];
+    const colControl5 = useDragControls();
+    const colControl6 = useDragControls();
+    const colControl7 = useDragControls();
+    const colControl8 = useDragControls();
+    const colControl9 = useDragControls();
+    const colControls = [colControl0, colControl1, colControl2, colControl3, colControl4, colControl5, colControl6, colControl7, colControl8, colControl9];
 
     // Initialize Game
     useEffect(() => {
-        const initialGrid = generateGrid();
+        const config = generateLevelConfig(currentLevel);
+        const effectiveConfig = isTutorial ? { rows: 4, cols: 5, density: 0.5, scrambleSteps: 0 } : config;
+
+        const initialGrid = generateGrid(effectiveConfig.rows, effectiveConfig.cols, effectiveConfig.density);
         setGrid(initialGrid);
+        setTargetGrid(initialGrid);
 
-        if (isTutorial) {
-            setTargetGrid(initialGrid); // Target is the starting state
-        } else {
-            setTargetGrid(initialGrid);
-        }
-
-        setEmployees(Array.from({ length: ROWS }, generateInitials));
+        setEmployees(Array.from({ length: effectiveConfig.rows }, generateInitials));
         setGamePhase('memorize');
 
         setMoves(0);
         setSeconds(0);
         setGridVersion(0);
         setStartMessage(false);
-    }, []); // Run once on mount
+    }, [isTutorial, currentLevel]); // Run once on mount (and if tutorial changes?)
 
     // Clear start message after delay
     useEffect(() => {
@@ -193,19 +254,25 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
     useEffect(() => {
         if (isTutorial || gamePhase !== 'memorize' || targetGrid.length === 0) return;
 
+        // Use level config for steps
+        const config = generateLevelConfig(currentLevel);
+        const steps = config.scrambleSteps;
+
         const scrambleTimer = setTimeout(() => {
             let currentScrambledGrid = [...targetGrid.map(row => [...row])];
+            const rows = currentScrambledGrid.length;
+            const cols = currentScrambledGrid[0].length;
 
-            // Perform 15 random moves
-            for (let k = 0; k < 15; k++) {
+            // Perform random moves
+            for (let k = 0; k < steps; k++) {
                 const isRow = Math.random() > 0.5;
                 if (isRow) {
-                    const rowIndex = Math.floor(Math.random() * ROWS);
+                    const rowIndex = Math.floor(Math.random() * rows);
                     const direction = Math.random() > 0.5 ? 'left' : 'right';
                     const row = currentScrambledGrid[rowIndex];
                     currentScrambledGrid[rowIndex] = getShiftedRow(row, direction);
                 } else {
-                    const colIndex = Math.floor(Math.random() * COLS);
+                    const colIndex = Math.floor(Math.random() * cols);
                     const direction = Math.random() > 0.5 ? 'up' : 'down';
                     currentScrambledGrid = getShiftedColumn(currentScrambledGrid, colIndex, direction);
                 }
@@ -219,7 +286,7 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
         }, 3000);
 
         return () => clearTimeout(scrambleTimer);
-    }, [targetGrid, gamePhase, isTutorial]);
+    }, [targetGrid, gamePhase, isTutorial, currentLevel]);
 
     // Timer Logic
     useEffect(() => {
@@ -321,7 +388,7 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
             }
         }
 
-        for (let i = 0; i < ROWS; i++) {
+        for (let i = 0; i < grid.length; i++) {
             newGrid[i][colIndex] = column[i];
         }
 
@@ -340,31 +407,40 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
     };
 
     const winGame = () => {
-        setGamePhase('won');
-        const finalScore = Math.max(0, 10000 - ((moves + 1) * 100) - (seconds * 10));
-        setScore(finalScore);
-        saveScore(finalScore, moves + 1, seconds);
+        setGamePhase('level_complete');
+
+        // Calculate Score
+        // Re-generate config to get scrambleSteps
+        const config = generateLevelConfig(currentLevel);
+        // Tutorial override? Tutorial has 0 scrambleSteps usually?
+        // Use 5 for tutorial base if needed, or just 0 so penalty is higher?
+        // Actually tutorial doesn't score usually.
+
+        const minMoves = isTutorial ? 5 : config.scrambleSteps;
+        const excessMoves = Math.max(0, moves - minMoves);
+
+        const movePenalty = excessMoves * 50;
+        const timePenalty = seconds * 5;
+
+        const rawScore = Math.max(0, 1000 - movePenalty - timePenalty);
+        const finalLevelScore = rawScore * currentLevel;
+
+        setLevelScore(finalLevelScore);
+
+        if (onLevelComplete) {
+            onLevelComplete(finalLevelScore);
+        }
+
+        if (!isTutorial) {
+            const stored = parseInt(localStorage.getItem('shift_shift_level') || '1', 10);
+            if (currentLevel + 1 > stored) {
+                localStorage.setItem('shift_shift_level', (currentLevel + 1).toString());
+            }
+        }
     };
 
-    const saveScore = (finalScore: number, finalMoves: number, finalSeconds: number) => {
-        if (isTutorial) return;
+    // deleted saveScore
 
-        const savedScores = localStorage.getItem('shift_shift_highscores');
-        let currentHighScores = savedScores ? JSON.parse(savedScores) : [];
-
-        const newScore = {
-            name: playerName,
-            score: finalScore,
-            moves: finalMoves,
-            time: finalSeconds
-        };
-
-        const updatedScores = [...currentHighScores, newScore]
-            .sort((a: any, b: any) => b.score - a.score)
-            .slice(0, 10);
-
-        localStorage.setItem('shift_shift_highscores', JSON.stringify(updatedScores));
-    };
 
     // NEW: Handle Row Drag End from Row.tsx
     const handleRowDragEnd = (idx: number, shift: number) => {
@@ -410,12 +486,14 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
         setGridVersion(v => v + 1); // Remounts rows to prevent animation blink
     };
 
-    const initializeGame = () => {
+    const initializeGame = (level = currentLevel) => {
         // Re-init game
-        const initialGrid = generateGrid();
+        const config = generateLevelConfig(level);
+        const initialGrid = generateGrid(config.rows, config.cols, config.density);
+
         setGrid(initialGrid);
         setTargetGrid(initialGrid);
-        setEmployees(Array.from({ length: ROWS }, generateInitials));
+        setEmployees(Array.from({ length: config.rows }, generateInitials));
         setGamePhase('memorize');
         setMoves(0);
         setSeconds(0);
@@ -423,234 +501,348 @@ export default function ShiftShift({ playerName, onExit, isTutorial = false, onT
         setStartMessage(false);
     }
 
+    const handleNextLevel = () => {
+        const next = currentLevel + 1;
+        setCurrentLevel(next);
+        initializeGame(next);
+    };
+
+    // Auto-Advance
+    useEffect(() => {
+        if (gamePhase === 'level_complete') {
+            const t = setTimeout(() => {
+                handleNextLevel();
+            }, 3000); // 3 seconds delay
+            return () => clearTimeout(t);
+        }
+    }, [gamePhase, handleNextLevel]);
+
 
     if (grid.length === 0) return null;
 
+    const levelsUntilExpand = 3 - ((currentLevel - 1) % 3);
+    const completedSteps = 3 - levelsUntilExpand;
+
     return (
-        <div className="flex flex-col items-center justify-center h-full gap-2 md:gap-8 animate-in fade-in zoom-in duration-500 w-full max-w-[100vw] overflow-hidden py-1 md:py-0">
-            <div className="flex items-center justify-between w-full max-w-md mb-2 px-6 md:px-0 scale-90 md:scale-100 origin-bottom">
-                <div className="text-center">
-                    <div className={`text-xs font-bold ${GAME_THEME.colors.textDim} uppercase tracking-wider mb-1 font-display`}>Time</div>
-                    <div className={`text-3xl font-black ${GAME_THEME.colors.textMain} font-mono tracking-tight ${GAME_THEME.colors.displayBg} px-4 py-2 ${GAME_THEME.layout.radius} border ${GAME_THEME.colors.displayBorder} shadow-inner`}>
-                        {seconds}
+        <div className="flex flex-col items-center justify-center h-full w-full max-w-[100vw] overflow-hidden relative bg-[#F2F7F6]">
+
+
+
+            {/* Top HUD */}
+            <div className="absolute top-4 left-0 right-0 px-6 flex flex-col items-center gap-4 z-20 max-w-2xl mx-auto w-full pointer-events-none">
+
+                {/* Row 1: Stats */}
+                <div className="flex justify-between items-start w-full pointer-events-auto">
+                    {/* Level Badge */}
+                    <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#03372E]/60">Level</span>
+                        <span className="text-2xl font-black text-[#03372E] font-display">{currentLevel}</span>
+                    </div>
+
+                    {/* Score */}
+                    <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#03372E]/60">Score</span>
+                        <span className="text-2xl font-black text-[#03372E] font-mono tracking-tight">{displayScore.toLocaleString()}</span>
+                    </div>
+
+                    {/* Time */}
+                    <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#03372E]/60">Time</span>
+                        <div className="text-2xl font-black text-[#03372E] font-mono bg-[#E0E6E5] px-3 py-1 rounded-lg border border-white/50 min-w-[3ch] text-center">
+                            {seconds}
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex gap-2">
-                    {/* Desktop Peek Button */}
-                    <button
-                        onMouseDown={() => setIsPeeking(true)}
-                        onMouseUp={() => setIsPeeking(false)}
-                        onMouseLeave={() => setIsPeeking(false)}
-                        onTouchStart={() => setIsPeeking(true)}
-                        onTouchEnd={() => setIsPeeking(false)}
-                        className={`hidden md:flex group relative px-4 py-3 ${GAME_THEME.colors.btnPeek} ${GAME_THEME.layout.radius} transition-all active:scale-95 flex-col items-center justify-center gap-1 border`}
-                        title="Hold to Peek"
-                    >
-                        <Eye className="w-6 h-6" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-60 group-hover:opacity-100">Peek</span>
-                    </button>
 
-                    <button
-                        onClick={initializeGame}
-                        className={`group relative px-4 py-3 ${GAME_THEME.colors.btnReset} ${GAME_THEME.layout.radius} transition-all active:scale-95 flex flex-col items-center justify-center gap-1 border`}
-                        title="Reset Level"
-                    >
-                        <RefreshCw className="w-6 h-6" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-60 group-hover:opacity-100">Reset</span>
-                    </button>
-                </div>
             </div>
 
-            <div className={`flex flex-col gap-4 p-4 md:p-8 ${GAME_THEME.colors.panelBg} backdrop-blur-sm ${GAME_THEME.layout.radiusLg || 'rounded-3xl'} border ${GAME_THEME.colors.panelBorder} ${GAME_THEME.layout.shadowLg} relative scale-[0.72] sm:scale-75 md:scale-100 origin-top -mb-32 sm:-mb-24 md:mb-0`}>
-
-                {/* Memorize Phase Indicator - Floats above the grid */}
-                {gamePhase === 'memorize' && !isTutorial && (
-                    <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-64 z-30 animate-in slide-in-from-bottom-4 fade-in duration-500">
-                        <div className={`${GAME_THEME.colors.msgMemoryBg} backdrop-blur-md border ${GAME_THEME.colors.msgMemoryBorder} ${GAME_THEME.colors.msgMemoryText} p-3 ${GAME_THEME.layout.radius} flex flex-col items-center gap-2 ${GAME_THEME.layout.shadowLg}`}>
-                            <div className={`text-xs font-bold uppercase tracking-widest ${GAME_THEME.colors.msgMemoryTitle}`}>Remember the schedule</div>
-
-                            {/* Progress Bar */}
-                            <div className={`h-1.5 w-full ${GAME_THEME.colors.overlayBg} rounded-full overflow-hidden`}>
-                                <div className={`h-full ${GAME_THEME.colors.indicatorPulse} rounded-full animate-[width_3s_linear_forwards] w-full origin-left`} style={{ animationName: 'shrinkWidth' }} />
-                            </div>
-
-                            <style>{`
-                                @keyframes shrinkWidth {
-                                    from { width: 100%; }
-                                    to { width: 0%; }
-                                }
-                            `}</style>
+            {/* Global Overlays - Moved to Root for Z-Index */}
+            {/* Memorize Phase Indicator */}
+            {gamePhase === 'memorize' && !isTutorial && (
+                <div className="absolute top-28 left-1/2 -translate-x-1/2 w-64 z-50 animate-in slide-in-from-top-4 fade-in duration-500 pointer-events-none">
+                    <div className={`${GAME_THEME.colors.msgMemoryBg} backdrop-blur-md border ${GAME_THEME.colors.msgMemoryBorder} ${GAME_THEME.colors.msgMemoryText} p-3 ${GAME_THEME.layout.radius} flex flex-col items-center gap-2 ${GAME_THEME.layout.shadowLg}`}>
+                        <div className={`text-xs font-bold uppercase tracking-widest ${GAME_THEME.colors.msgMemoryTitle}`}>Remember the schedule</div>
+                        <div className={`h-1.5 w-full ${GAME_THEME.colors.overlayBg} rounded-full overflow-hidden`}>
+                            <div className={`h-full ${GAME_THEME.colors.indicatorPulse} rounded-full animate-[width_3s_linear_forwards] w-full origin-left`} style={{ animationName: 'shrinkWidth' }} />
                         </div>
-                    </div>
-                )}
-
-                {/* Oh Shift Message - Floats above the grid */}
-                {startMessage && (
-                    <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-72 z-30 animate-in zoom-in slide-in-from-bottom-4 fade-in duration-300">
-                        <div className={`${GAME_THEME.colors.msgAlertBg} backdrop-blur-md border ${GAME_THEME.colors.msgAlertBorder} ${GAME_THEME.colors.msgAlertText} p-4 ${GAME_THEME.layout.radius} flex flex-col items-center gap-1 ${GAME_THEME.layout.shadowLg} text-center`}>
-                            <div className={`text-lg font-black uppercase italic tracking-tighter ${GAME_THEME.colors.msgAlertTitle}`}>Oh Shift!</div>
-                            <div className="text-xs font-bold uppercase tracking-widest opacity-80">You need to get the shifts back!</div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Columns Overlay Layer - Rendered ON TOP of Rows? No, MUST BE ON TOP to capture drags. 
-                    But wait, Row elements have 'drag x'.
-                    If Column elements are on top, they catch pointer.
-                    Column.tsx has pointer-events-none on wrapper, and pointer-events-auto on HEADER.
-                    So it is SAFE to render this ON TOP of grid, provided the "Gap" areas don't block.
-                    The "Strip" in Column.tsx is visible only when dragging.
-                */}
-
-                {/* Column Headers + Draggable Strips */}
-                {/* We position this ABSOLUTELY over the grid to match alignment? 
-                    Actually, we can put it in the flow as the "Header Row", and let the strips hang down.
-                    The Header Row in Flex flow works. The "Strip" is absolute relative to the Header or Column container.
-                */}
-                <div className="flex items-center gap-4 z-20 relative">
-                    <div className="w-12 flex-shrink-0" /> {/* Ghost Avatar */}
-
-                    <div className="flex gap-4">
-                        {DAYS.map((day, colIndex) => {
-                            // Extract column data
-                            const colData = grid.map(row => row[colIndex]);
-
-                            return (
-                                <div key={`col-wrapper-${colIndex}-${gridVersion}`} className="relative">
-                                    <Column
-                                        key={`col-${colIndex}-${gridVersion}`} // Remount on version change too!
-                                        colIndex={colIndex}
-                                        header={day}
-                                        colData={colData}
-                                        gamePhase={gamePhase}
-                                        dragControls={colControls[colIndex]}
-                                        onDragStart={handleColDragStart}
-                                        onDragEnd={handleColDragEnd}
-                                        isDimmed={!!(tutorialStep && tutorialStep !== 'finish' && tutorialStep !== 'scrambling' && tutorialStep !== 'watch' && !(tutorialStep === 'fix_col' && colIndex === 3))}
-                                        isLocked={!!(tutorialStep && !(tutorialStep === 'fix_col' && colIndex === 3))}
-                                        scrambleAnim={colIndex === 3 ? scramblingState.colAnim : null}
-                                        onScrambleComplete={onColScrambleComplete}
-                                    />
-                                    {/* Ghost Hand for Column Step */}
-                                    {tutorialStep === 'fix_col' && colIndex === 3 && (
-                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50">
-                                            <GhostHand direction="up" />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                        <style>{`@keyframes shrinkWidth { from { width: 100%; } to { width: 0%; } }`}</style>
                     </div>
                 </div>
+            )}
 
-                {/* Rows Grid */}
-                {grid.map((row, rowIndex) => (
-                    <div key={`row-wrapper-${rowIndex}-${gridVersion}`} className="relative">
-                        <Row
-                            key={`${rowIndex}-${gridVersion}`}
-                            rowIndex={rowIndex}
-                            row={row}
-                            employee={employees[rowIndex]}
-                            gamePhase={gamePhase}
-                            isPeeking={isPeeking}
-                            hiddenColIndex={draggingCol} // Pass the hidden column
-                            colControls={colControls}
-                            onDragEnd={handleRowDragEnd}
-                            isDimmed={!!(tutorialStep && tutorialStep !== 'finish' && tutorialStep !== 'scrambling' && tutorialStep !== 'watch' && !(tutorialStep === 'fix_row' && rowIndex === 1))}
-                            isLocked={!!(tutorialStep && !(tutorialStep === 'fix_row' && rowIndex === 1))}
-                            scrambleAnim={rowIndex === 1 ? scramblingState.rowAnim : null}
-                            onScrambleComplete={onRowScrambleComplete}
-                        />
-                        {/* Ghost Hand for Row Step */}
-                        {tutorialStep === 'fix_row' && rowIndex === 1 && (
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50">
-                                <GhostHand direction="left" />
+            {/* Oh Shift Message */}
+            {startMessage && (
+                <div className="absolute top-28 left-1/2 -translate-x-1/2 w-72 z-50 animate-in zoom-in slide-in-from-top-4 fade-in duration-300 pointer-events-none">
+                    <div className={`${GAME_THEME.colors.msgAlertBg} backdrop-blur-md border ${GAME_THEME.colors.msgAlertBorder} ${GAME_THEME.colors.msgAlertText} p-4 ${GAME_THEME.layout.radius} flex flex-col items-center gap-1 ${GAME_THEME.layout.shadowLg} text-center`}>
+                        <div className={`text-lg font-black uppercase italic tracking-tighter ${GAME_THEME.colors.msgAlertTitle}`}>Oh Shift!</div>
+                        <div className="text-xs font-bold uppercase tracking-widest opacity-80">You need to get the shifts back!</div>
+                    </div>
+                </div>
+            )}
+
+            {/* Game Area Wrapper */}
+            <motion.div
+                className="z-10 relative"
+                animate={{
+                    scale: (gamePhase === 'level_complete' || gamePhase === 'shift_over') ? 0.9 : 1,
+                    opacity: (gamePhase === 'level_complete' || gamePhase === 'shift_over') ? 0.4 : 1,
+                    filter: (gamePhase === 'level_complete' || gamePhase === 'shift_over') ? 'blur(2px)' : 'blur(0px)'
+                }}
+                transition={{ duration: 0.5, ease: 'easeInOut' }}
+            >
+                {/* Original Grid Container with Responsive Scale */}
+                <div className={`flex flex-col gap-4 p-4 md:p-8 ${GAME_THEME.colors.panelBg} backdrop-blur-sm ${GAME_THEME.layout.radiusLg || 'rounded-3xl'} border ${GAME_THEME.colors.panelBorder} ${GAME_THEME.layout.shadowLg} relative scale-[0.72] sm:scale-75 md:scale-100 origin-top -mb-32 sm:-mb-24 md:mb-0`}>
+
+                    {/* Top Controls: Reset & End (Desktop) */}
+                    <div className="flex justify-between w-full pb-4 border-b border-[#03372E]/10 mb-2 pointer-events-auto z-20 relative">
+                        <button
+                            onClick={() => initializeGame()}
+                            className={`group relative px-4 py-3 ${GAME_THEME.colors.btnReset} ${GAME_THEME.layout.radius} transition-all active:scale-95 flex items-center justify-center gap-2 border border-transparent hover:border-[#D4898F]/20`}
+                            title="Reset Level"
+                        >
+                            <RefreshCw className="w-5 h-5 opacity-60 group-hover:opacity-100 transition-opacity" />
+                            <span className="font-bold text-xs">RESET</span>
+                        </button>
+
+                        <button
+                            onClick={() => setGamePhase('shift_over')}
+                            className={`group relative px-4 py-3 bg-white/50 hover:bg-white text-[#03372E] rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 border border-transparent hover:border-[#03372E]/10`}
+                            title="End Shift"
+                        >
+                            <span className="font-bold text-xs">END SHIFT</span>
+                        </button>
+                    </div>
+
+
+
+
+
+                    {/* Grid Wrapper */}
+                    <div className="relative flex flex-col gap-4">
+                        {/* Columns Grid */}
+                        <div className="flex items-center gap-4 z-20 relative">
+                            <div className="w-12 flex-shrink-0" />
+                            <div className="flex gap-4">
+                                {grid.length > 0 && grid[0].map((_, colIndex) => {
+                                    const colData = grid.map(row => row[colIndex]);
+                                    const dayName = DAYS[colIndex] || `D${colIndex + 1}`;
+                                    return (
+                                        <div key={`col-wrapper-${colIndex}-${gridVersion}`} className="relative">
+                                            <Column
+                                                key={`col-${colIndex}-${gridVersion}`}
+                                                colIndex={colIndex}
+                                                header={dayName}
+                                                colData={colData}
+                                                gamePhase={gamePhase}
+                                                dragControls={colControls[colIndex]}
+                                                onDragStart={handleColDragStart}
+                                                onDragEnd={handleColDragEnd}
+                                                isDimmed={!!(tutorialStep && tutorialStep !== 'finish' && tutorialStep !== 'scrambling' && tutorialStep !== 'watch' && !(tutorialStep === 'fix_col' && colIndex === 3))}
+                                                isLocked={!!(tutorialStep && !(tutorialStep === 'fix_col' && colIndex === 3))}
+                                                scrambleAnim={colIndex === 3 ? scramblingState.colAnim : null}
+                                                onScrambleComplete={onColScrambleComplete}
+                                            />
+                                            {tutorialStep === 'fix_col' && colIndex === 3 && (
+                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50"><GhostHand direction="up" /></div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Rows Content */}
+                        {grid.map((row, rowIndex) => (
+                            <div key={`row-wrapper-${rowIndex}-${gridVersion}`} className="relative">
+                                <Row
+                                    key={`${rowIndex}-${gridVersion}`}
+                                    rowIndex={rowIndex}
+                                    row={row}
+                                    employee={employees[rowIndex]}
+                                    gamePhase={gamePhase}
+                                    isPeeking={isPeeking}
+                                    hiddenColIndex={draggingCol}
+                                    colControls={colControls}
+                                    onDragEnd={handleRowDragEnd}
+                                    isDimmed={!!(tutorialStep && tutorialStep !== 'finish' && tutorialStep !== 'scrambling' && tutorialStep !== 'watch' && !(tutorialStep === 'fix_row' && rowIndex === 1))}
+                                    isLocked={!!(tutorialStep && !(tutorialStep === 'fix_row' && rowIndex === 1))}
+                                    scrambleAnim={rowIndex === 1 ? scramblingState.rowAnim : null}
+                                    onScrambleComplete={onRowScrambleComplete}
+                                />
+                                {tutorialStep === 'fix_row' && rowIndex === 1 && (
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50"><GhostHand direction="left" /></div>
+                                )}
+                            </div>
+                        ))}
+
+                        {/* Peek Overlay */}
+                        {isPeeking && gamePhase === 'playing' && (
+                            <div className="absolute inset-0 z-10 pointer-events-none flex flex-col gap-4">
+                                <div className="h-10 w-full" />
+                                {targetGrid.map((row, rowIndex) => (
+                                    <div key={`peek-row-${rowIndex}`} className="flex items-center gap-4 opacity-40">
+                                        <div className="w-12 h-12 invisible" />
+                                        <div className="flex gap-4">
+                                            {row.map((cell, colIndex) => (
+                                                <div key={`peek-${rowIndex}-${colIndex}`} className={`w-16 h-16 ${GAME_THEME.layout.radius} border-4 ${cell === 1 ? `${GAME_THEME.colors.cellShift} ${GAME_THEME.colors.cellShiftBorder}` : `${GAME_THEME.colors.cellEmpty} ${GAME_THEME.colors.cellEmptyBorder}`}`} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
-                ))}
 
-                {/* Peek Overlay */}
-                {isPeeking && gamePhase === 'playing' && (
-                    <div className="absolute inset-0 z-10 pointer-events-none flex flex-col gap-4 p-8">
-                        {/* Spacer for Column Header Row (h-10) */}
-                        <div className="h-10 w-full" />
-
-                        {targetGrid.map((row, rowIndex) => (
-                            <div key={`peek-row-${rowIndex}`} className="flex items-center gap-4 opacity-40">
-                                <div className="w-12 h-12 invisible" /> {/* Avatar Spacer */}
-                                <div className="flex gap-4">
-                                    {row.map((cell, colIndex) => (
-                                        <div
-                                            key={`peek-${rowIndex}-${colIndex}`}
-                                            className={`w-16 h-16 ${GAME_THEME.layout.radius} border-4 ${cell === 1 ? `${GAME_THEME.colors.cellShift} ${GAME_THEME.colors.cellShiftBorder}` : `${GAME_THEME.colors.cellEmpty} ${GAME_THEME.colors.cellEmptyBorder}`}`}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
+                    {/* Bottom Controls: Peek (Full Width) */}
+                    <div className="hidden md:flex w-full pt-4 border-t border-[#03372E]/10 mt-2 pointer-events-auto z-20 relative">
+                        <button
+                            onMouseDown={() => setIsPeeking(true)}
+                            onMouseUp={() => setIsPeeking(false)}
+                            onMouseLeave={() => setIsPeeking(false)}
+                            onTouchStart={() => setIsPeeking(true)}
+                            onTouchEnd={() => setIsPeeking(false)}
+                            className={`w-full group relative px-4 py-3 ${GAME_THEME.colors.btnPeek} ${GAME_THEME.layout.radius} transition-all active:scale-95 flex items-center justify-center gap-2 border border-transparent hover:border-[#03372E]/10`}
+                            title="Hold to Peek"
+                        >
+                            <Eye className="w-5 h-5 opacity-60 group-hover:opacity-100 transition-opacity" />
+                            <span className="font-bold text-xs uppercase tracking-wider">Hold to Peek</span>
+                        </button>
                     </div>
-                )}
-            </div>
+                </div>
+            </motion.div >
 
-            {/* Mobile Peek Button - Below Board */}
-            <button
+            {/* Victory Card Layer */}
+            <AnimatePresence>
+                {
+                    gamePhase === 'level_complete' && (
+                        <motion.div
+                            className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none"
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        >
+                            <motion.div
+                                className={`w-80 md:w-96 ${GAME_THEME.colors.panelBg} p-8 rounded-3xl shadow-2xl border ${GAME_THEME.colors.panelBorderAccent} flex flex-col gap-6 items-center pointer-events-auto`}
+                                initial={{ y: 50, opacity: 0, scale: 0.9 }}
+                                animate={{ y: 0, opacity: 1, scale: 1 }}
+                                exit={{ y: 50, opacity: 0, scale: 0.9 }}
+                                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            >
+                                <div className="text-center space-y-1">
+                                    <div className="text-xs font-bold uppercase tracking-widest text-[#D4898F]">Level {currentLevel} Complete</div>
+                                    <div className="text-5xl font-black text-[#03372E] font-display uppercase tracking-tight leading-none">
+                                        {levelScore.toLocaleString()}
+                                    </div>
+                                    <div className="text-xs font-bold uppercase tracking-widest text-[#03372E]/40">Points Earned</div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 w-full">
+                                    <div className="bg-[#E0E6E5] p-3 rounded-xl text-center">
+                                        <div className="text-[10px] font-bold uppercase text-[#03372E]/60">Moves</div>
+                                        <div className="text-xl font-bold text-[#03372E] font-mono">{moves}</div>
+                                    </div>
+                                    <div className="bg-[#E0E6E5] p-3 rounded-xl text-center">
+                                        <div className="text-[10px] font-bold uppercase text-[#03372E]/60">Time</div>
+                                        <div className="text-xl font-bold text-[#03372E] font-mono">{seconds}</div>
+                                    </div>
+                                </div>
+
+                                <div className="w-full flex justify-center py-2">
+                                    <div className="flex gap-1 items-center animate-pulse">
+                                        <div className="w-2 h-2 rounded-full bg-[#03372E]" />
+                                        <div className="w-2 h-2 rounded-full bg-[#03372E] animation-delay-200" />
+                                        <div className="w-2 h-2 rounded-full bg-[#03372E] animation-delay-400" />
+                                    </div>
+                                    <span className="ml-3 text-xs font-bold uppercase tracking-widest text-[#03372E]/60">Next Shift Starting...</span>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )
+                }
+            </AnimatePresence >
+
+
+
+            {/* Mobile Peek Button */}
+            < button
                 onMouseDown={() => setIsPeeking(true)}
                 onMouseUp={() => setIsPeeking(false)}
                 onMouseLeave={() => setIsPeeking(false)}
                 onTouchStart={() => setIsPeeking(true)}
                 onTouchEnd={() => setIsPeeking(false)}
-                className={`flex md:hidden w-full max-w-xs ${GAME_THEME.colors.btnPeek} ${GAME_THEME.layout.radius} py-5 mt-8 items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform z-50`}
+                className={`flex md:hidden w-full max-w-xs ${GAME_THEME.colors.btnPeek} ${GAME_THEME.layout.radius} py-5 absolute bottom-20 items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform z-10`}
             >
                 <Eye className="w-6 h-6" />
                 <span className="text-sm font-bold uppercase tracking-wider">Hold to Peek</span>
-            </button>
+            </button >
 
-            <div className="flex flex-col items-center gap-1 mt-2 md:mt-0 opacity-60 md:opacity-100">
-                <div className={`${GAME_THEME.colors.textDim} text-[10px] md:text-sm font-medium flex items-center gap-2`}>
-                    <div className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full ${GAME_THEME.colors.indicatorPulse} animate-pulse`} />
-                    Drag rows or columns to fix
-                </div>
-                <div className={`${GAME_THEME.colors.textDim} text-[10px] md:text-sm font-medium flex items-center gap-2 md:flex`}>
-                    <div className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full ${GAME_THEME.colors.indicatorPulse} animate-pulse`} />
-                    Hold Peek button or Space to check target
-                </div>
-            </div>
 
-            {/* Win Screen Overlay */}
-            {gamePhase === 'won' && (
-                <div className={`fixed inset-0 z-50 flex items-center justify-center ${GAME_THEME.colors.overlayBg} backdrop-blur-md animate-in fade-in zoom-in duration-300`}>
-                    <div className={`flex flex-col items-center gap-6 p-8 ${GAME_THEME.colors.panelBg} rounded-3xl border ${GAME_THEME.colors.panelBorderAccent} ${GAME_THEME.layout.shadowLg}`}>
-                        <div className="text-center space-y-2">
-                            <div className={`${GAME_THEME.colors.textWinTitle} font-bold tracking-widest uppercase`}>Excellent Work</div>
-                            <div className={`text-6xl font-bold ${GAME_THEME.colors.textWinScore} tracking-tighter`}>{score.toLocaleString()}</div>
-                            <div className={`${GAME_THEME.colors.textWinStats} font-mono text-xs uppercase tracking-widest mt-2`}>
-                                {moves} Moves • {seconds} Seconds
-                            </div>
-                        </div>
-                        <button
-                            onClick={onExit}
-                            className={`${GAME_THEME.colors.btnPrimary} font-bold px-8 py-4 ${GAME_THEME.layout.radius} transition-all active:scale-95`}
+            {/* Shift Over Overlay */}
+            <AnimatePresence>
+                {
+                    gamePhase === 'shift_over' && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 50 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 50 }}
+                            className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-[#03372E]/20 backdrop-blur-sm"
                         >
-                            RETURN TO LOBBY
-                        </button>
-                    </div>
-                </div>
-            )}
+                            <motion.div
+                                className="bg-[#D4898F] p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-white/20 relative overflow-hidden"
+                                initial={{ scale: 0.9 }}
+                                animate={{ scale: 1 }}
+                            >
+                                <div className="absolute top-0 left-0 w-full h-2 bg-white/20" />
 
+                                <div className="text-center space-y-4">
+                                    <div className="text-sm font-bold uppercase tracking-widest text-[#03372E]/60">Session Ended</div>
+                                    <h2 className="text-4xl font-black text-[#03372E] font-display uppercase tracking-tight leading-none">
+                                        Shift Over
+                                    </h2>
+
+                                    <div className="py-4 space-y-4">
+                                        <div className="bg-[#03372E]/10 p-4 rounded-2xl">
+                                            <div className="text-xs font-bold uppercase tracking-widest text-[#03372E]/60 mb-1">Total Score</div>
+                                            <div className="text-5xl font-black text-[#03372E] font-mono tracking-tight">{sessionScore.toLocaleString()}</div>
+                                        </div>
+
+                                        <div className="bg-[#03372E]/10 p-4 rounded-2xl">
+                                            <div className="text-xs font-bold uppercase tracking-widest text-[#03372E]/60 mb-1">Level Reached</div>
+                                            <div className="text-3xl font-black text-[#03372E] font-display tracking-tight">{currentLevel}</div>
+                                        </div>
+                                    </div>
+
+                                    {personalBest !== undefined && sessionScore > personalBest && (
+                                        <div className="animate-bounce bg-yellow-400 text-[#03372E] font-bold text-xs uppercase tracking-widest py-2 rounded-full mb-4">
+                                            New Personal Best!
+                                        </div>
+                                    )}
+
+                                    <button
+                                        onClick={() => onExit(currentLevel)}
+                                        className="w-full bg-[#03372E] text-white font-bold px-8 py-4 rounded-xl transition-all active:scale-95 text-lg hover:bg-[#044c40]"
+                                    >
+                                        RETURN TO LOBBY
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )
+                }
+            </AnimatePresence >
 
             {/* Tutorial Overlay */}
-            {tutorialStep && (
-                <TutorialOverlay
-                    step={tutorialStep}
-                    onNext={advanceTutorial}
-                    onSkip={() => {
-                        setTutorialStep(null);
-                        if (onTutorialComplete) onTutorialComplete();
-                    }}
-                />
-            )}
-        </div>
+            {
+                tutorialStep && (
+                    <TutorialOverlay
+                        step={tutorialStep}
+                        onNext={advanceTutorial}
+                        onSkip={() => {
+                            setTutorialStep(null);
+                            if (onTutorialComplete) onTutorialComplete();
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 }

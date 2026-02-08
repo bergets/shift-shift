@@ -8,6 +8,7 @@ interface HighScore {
   score: number;
   moves: number;
   time: number;
+  maxLevel?: number;
 }
 
 function App() {
@@ -18,28 +19,59 @@ function App() {
   const [forceTutorial, setForceTutorial] = useState(false);
   const [hasPlayed, setHasPlayed] = useState(!!localStorage.getItem('shift_shift_has_played'));
 
-  const loadHighScores = () => {
+  // maxUnlockedLevel state deleted
+  // const [selectedLevel, setSelectedLevel] = useState(1); // Deleted
+
+  const loadData = () => {
     const savedScores = localStorage.getItem('shift_shift_highscores');
     if (savedScores) {
       setHighScores(JSON.parse(savedScores));
     }
+
+    // shift_shift_level ignored for Arcade Mode
   };
 
   useEffect(() => {
-    loadHighScores();
-  }, [isPlaying]); // Reload scores when returning to lobby
+    loadData();
+  }, [isPlaying]); // Reload data when returning to lobby
+
+  const [sessionScore, setSessionScore] = useState(0);
+
+  const handleLevelComplete = (levelPoints: number) => {
+    setSessionScore(prev => prev + levelPoints);
+  };
+
+  const saveHighScore = (finalScore: number, maxLevel: number) => {
+    if (finalScore === 0) return;
+
+    const newEntry: HighScore = {
+      name: playerName,
+      score: finalScore,
+      moves: 0,
+      time: 0,
+      maxLevel: maxLevel
+    };
+
+    const newScores = [...highScores, newEntry]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
+    setHighScores(newScores);
+    localStorage.setItem('shift_shift_highscores', JSON.stringify(newScores));
+  };
 
   const startGame = () => {
     if (!playerName.trim()) return;
     setIsPlaying(true);
-    setForceTutorial(false); // Reset default unless explicit tutorial requested? 
-    // Actually, if we want to "Redo Tutorial", we initiate play with tutorial flag.
+    setForceTutorial(false);
+    setSessionScore(0);
   };
 
   const startTutorial = () => {
-    setPlayerName('TUT'); // Default name for tutorial? Or keep empty?
+    setPlayerName('TUT');
     setForceTutorial(true);
     setIsPlaying(true);
+    setSessionScore(0);
   };
 
   if (isPlaying) {
@@ -47,11 +79,16 @@ function App() {
       <div className={`h-screen md:min-h-screen ${GAME_THEME.colors.appBg} flex flex-col md:flex-row items-center justify-center p-0 md:p-8 ${GAME_THEME.colors.textMain} relative overflow-hidden transition-colors duration-500`}>
         <ShiftShift
           playerName={playerName || 'TUT'}
-          onExit={() => {
+          onExit={(ml: number) => {
+            saveHighScore(sessionScore, ml);
             setIsPlaying(false);
             setForceTutorial(false);
           }}
           isTutorial={forceTutorial || !hasPlayed}
+          initialLevel={1}
+          sessionScore={sessionScore}
+          onLevelComplete={handleLevelComplete}
+          personalBest={highScores.find(s => s.name === playerName)?.score}
           onTutorialComplete={() => {
             localStorage.setItem('shift_shift_has_played', 'true');
             setHasPlayed(true);
@@ -90,13 +127,16 @@ function App() {
               maxLength={3}
             />
           </div>
+
+          {/* Level Select */}
           <button
             onClick={startGame}
             disabled={!playerName.trim()}
             className={`w-full ${GAME_THEME.colors.btnPrimary} font-bold text-xl py-4 ${GAME_THEME.layout.radius} transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            START
+            START SHIFT
           </button>
+
           <button
             onClick={startTutorial}
             className={`w-full ${GAME_THEME.colors.btnReset} font-bold text-sm py-3 ${GAME_THEME.layout.radius} transition-all active:scale-95 mt-2`}
@@ -107,13 +147,14 @@ function App() {
 
         {highScores.length > 0 && (
           <div className="space-y-4">
-            <h2 className={`text-sm font-bold ${GAME_THEME.colors.textAccent} uppercase tracking-wider text-center font-display`}>Top Managers</h2>
+            <h2 className={`text-sm font-bold ${GAME_THEME.colors.textAccent} uppercase tracking-wider text-center font-display`}>Top Shift Managers</h2>
             <div className={`${GAME_THEME.colors.panelBg} ${GAME_THEME.layout.radius} border ${GAME_THEME.colors.panelBorder} overflow-hidden`}>
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className={`border-b ${GAME_THEME.colors.panelBorder} text-xs ${GAME_THEME.colors.textDim} font-bold uppercase tracking-wider`}>
                     <th className="px-4 py-3">Rank</th>
                     <th className="px-4 py-3">Manager</th>
+                    <th className="px-4 py-3 text-center">Max Level</th>
                     <th className="px-4 py-3 text-right">Score</th>
                   </tr>
                 </thead>
@@ -126,6 +167,7 @@ function App() {
                         </span>
                       </td>
                       <td className={`px-4 py-3 font-bold ${GAME_THEME.colors.textMain}`}>{s.name}</td>
+                      <td className={`px-4 py-3 font-mono ${GAME_THEME.colors.textAccent} font-bold text-center`}>{s.maxLevel || '-'}</td>
                       <td className={`px-4 py-3 font-mono ${GAME_THEME.colors.textAccent} font-bold text-right`}>{s.score.toLocaleString()}</td>
                     </tr>
                   ))}

@@ -6,7 +6,7 @@ interface RowProps {
     rowIndex: number;
     row: number[];
     employee: string;
-    gamePhase: 'memorize' | 'playing' | 'won';
+    gamePhase: 'memorize' | 'playing' | 'level_complete' | 'won' | 'shift_over';
     isPeeking: boolean;
     hiddenColIndex: number | null; // NEW: To hide a cell being dragged vertically
     colControls: any[];
@@ -18,18 +18,16 @@ interface RowProps {
 }
 
 const CELL_SIZE = GAME_THEME.layout.cellSize;
-const COLS = 5;
-const ROW_WIDTH = CELL_SIZE * COLS; // 400px
-
+// Removed fixed COLS and ROW_WIDTH.
 // We use 5 buffers to allow momentum settling without risk of hitting edge.
 // Layout: [B0, B1, B2(Center), B3, B4]
-// Width: 5 * ROW_WIDTH.
-// Center Start: -2 * ROW_WIDTH.
 const BUFFER_COUNT = 5;
 const CENTER_INDEX = 2;
-const START_X = -CENTER_INDEX * ROW_WIDTH;
 
 export default function Row({ rowIndex, row, employee, gamePhase, isPeeking, hiddenColIndex, colControls, onDragEnd, isDimmed = false, isLocked = false, scrambleAnim, onScrambleComplete }: RowProps) {
+    const ROW_WIDTH = row.length * CELL_SIZE;
+    const START_X = -CENTER_INDEX * ROW_WIDTH;
+
     const x = useMotionValue(START_X);
     const draggingRef = useRef(false);
 
