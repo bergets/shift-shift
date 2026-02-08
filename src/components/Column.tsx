@@ -1,14 +1,14 @@
 import { useRef, useState, useEffect } from 'react';
-import { motion, useMotionValue, useMotionValueEvent, animate } from 'framer-motion';
+import { motion, useMotionValue, useMotionValueEvent, animate, DragControls } from 'framer-motion';
 import { GAME_THEME } from '../theme';
 
 interface ColumnProps {
     colIndex: number;
     colData: number[]; // The vertical slice of data
     header: string;
-    gamePhase: 'memorize' | 'playing' | 'won';
-    dragControls: any; // Passed from parent
-    onDragStart: (colIndex: number) => void;
+    gamePhase: 'memorize' | 'playing' | 'level_complete' | 'won' | 'shift_over';
+    dragControls: DragControls;
+    onDragStart: (idx: number) => void;
     onDragEnd: (colIndex: number, shiftAmount: number) => void;
     isDimmed?: boolean;
     isLocked?: boolean;
@@ -17,12 +17,13 @@ interface ColumnProps {
 }
 
 const CELL_SIZE = GAME_THEME.layout.cellSize;
-const ROWS = 4;
-const COL_HEIGHT = CELL_SIZE * ROWS; // 320px
+// Removed fixed constants
 const BUFFER_COUNT = 5;
-const START_Y = -2 * COL_HEIGHT;
 
 export default function Column({ colIndex, colData, header, gamePhase, dragControls, onDragStart, onDragEnd, isDimmed = false, isLocked = false, scrambleAnim, onScrambleComplete }: ColumnProps) {
+    const COL_HEIGHT = colData.length * CELL_SIZE;
+    const START_Y = -2 * COL_HEIGHT;
+
     const y = useMotionValue(START_Y);
     const draggingRef = useRef(false);
     const [isDragging, setIsDragging] = useState(false);
@@ -123,7 +124,7 @@ export default function Column({ colIndex, colData, header, gamePhase, dragContr
 
             {/* The Motion Strip */}
             {/* We enable drag on this element, but mapped to controls from header */}
-            <div className={`absolute top-14 left-0 w-16 h-[320px] overflow-hidden pointer-events-none z-10 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`absolute top-14 left-0 w-16 overflow-hidden pointer-events-none z-10 ${isVisible ? 'opacity-100' : 'opacity-0'}`} style={{ height: COL_HEIGHT }}>
                 <motion.div
                     drag={gamePhase === 'playing' && !isLocked ? "y" : false}
                     dragControls={dragControls}
