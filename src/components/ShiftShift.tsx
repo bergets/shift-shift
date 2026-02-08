@@ -523,29 +523,29 @@ export default function ShiftShift({
 
 
     return (
-        <div className="flex flex-col items-center justify-center h-full w-full max-w-[100vw] overflow-hidden relative bg-[#F2F7F6]">
+        <div className="flex flex-col md:grid md:grid-cols-[1fr_auto_1fr] items-center justify-center h-full w-full max-w-[100vw] overflow-hidden relative bg-[#F2F7F6]">
 
 
 
             {/* Top HUD */}
-            <div className="absolute top-4 left-0 right-0 px-6 flex flex-col items-center gap-4 z-20 max-w-2xl mx-auto w-full pointer-events-none">
+            <div className="absolute top-4 left-0 right-0 px-6 flex flex-col items-center gap-4 z-20 max-w-2xl mx-auto w-full pointer-events-none md:static md:w-auto md:h-auto md:mx-0 md:mr-12 md:items-end md:col-start-1 md:justify-self-end md:self-center">
 
                 {/* Row 1: Stats */}
-                <div className="flex justify-between items-start w-full pointer-events-auto">
+                <div className="flex justify-between items-start w-full pointer-events-auto md:flex-col md:gap-8 md:w-auto md:items-end">
                     {/* Level Badge */}
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center md:items-end">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-[#03372E]/60">Level</span>
                         <span className="text-2xl font-black text-[#03372E] font-display">{currentLevel}</span>
                     </div>
 
                     {/* Score */}
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center md:items-end">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-[#03372E]/60">Score</span>
                         <span className="text-2xl font-black text-[#03372E] font-mono tracking-tight">{displayScore.toLocaleString()}</span>
                     </div>
 
                     {/* Time */}
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center md:items-end">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-[#03372E]/60">Time</span>
                         <div className="text-2xl font-black text-[#03372E] font-mono bg-[#E0E6E5] px-3 py-1 rounded-lg border border-white/50 min-w-[3ch] text-center">
                             {seconds}
@@ -556,33 +556,11 @@ export default function ShiftShift({
 
             </div>
 
-            {/* Global Overlays - Moved to Root for Z-Index */}
-            {/* Memorize Phase Indicator */}
-            {gamePhase === 'memorize' && !isTutorial && (
-                <div className="absolute top-28 left-1/2 -translate-x-1/2 w-64 z-50 animate-in slide-in-from-top-4 fade-in duration-500 pointer-events-none">
-                    <div className={`${GAME_THEME.colors.msgMemoryBg} backdrop-blur-md border ${GAME_THEME.colors.msgMemoryBorder} ${GAME_THEME.colors.msgMemoryText} p-3 ${GAME_THEME.layout.radius} flex flex-col items-center gap-2 ${GAME_THEME.layout.shadowLg}`}>
-                        <div className={`text-xs font-bold uppercase tracking-widest ${GAME_THEME.colors.msgMemoryTitle}`}>Remember the schedule</div>
-                        <div className={`h-1.5 w-full ${GAME_THEME.colors.overlayBg} rounded-full overflow-hidden`}>
-                            <div className={`h-full ${GAME_THEME.colors.indicatorPulse} rounded-full animate-[width_3s_linear_forwards] w-full origin-left`} style={{ animationName: 'shrinkWidth' }} />
-                        </div>
-                        <style>{`@keyframes shrinkWidth { from { width: 100%; } to { width: 0%; } }`}</style>
-                    </div>
-                </div>
-            )}
 
-            {/* Oh Shift Message */}
-            {startMessage && (
-                <div className="absolute top-28 left-1/2 -translate-x-1/2 w-72 z-50 animate-in zoom-in slide-in-from-top-4 fade-in duration-300 pointer-events-none">
-                    <div className={`${GAME_THEME.colors.msgAlertBg} backdrop-blur-md border ${GAME_THEME.colors.msgAlertBorder} ${GAME_THEME.colors.msgAlertText} p-4 ${GAME_THEME.layout.radius} flex flex-col items-center gap-1 ${GAME_THEME.layout.shadowLg} text-center`}>
-                        <div className={`text-lg font-black uppercase italic tracking-tighter ${GAME_THEME.colors.msgAlertTitle}`}>Oh Shift!</div>
-                        <div className="text-xs font-bold uppercase tracking-widest opacity-80">You need to get the shifts back!</div>
-                    </div>
-                </div>
-            )}
 
             {/* Game Area Wrapper */}
             <motion.div
-                className="z-10 relative"
+                className="z-10 relative md:col-start-2 md:row-start-1"
                 animate={{
                     scale: (gamePhase === 'level_complete' || gamePhase === 'shift_over') ? 0.9 : 1,
                     opacity: (gamePhase === 'level_complete' || gamePhase === 'shift_over') ? 0.4 : 1,
@@ -590,6 +568,29 @@ export default function ShiftShift({
                 }}
                 transition={{ duration: 0.5, ease: 'easeInOut' }}
             >
+                {/* Global Overlays - Moved to Root for Z-Index */}
+                {/* Memorize Phase Indicator */}
+                {gamePhase === 'memorize' && !isTutorial && (
+                    <div className="absolute top-28 left-1/2 -translate-x-1/2 w-64 z-50 animate-in slide-in-from-top-4 fade-in duration-500 pointer-events-none">
+                        <div className={`${GAME_THEME.colors.msgMemoryBg} backdrop-blur-md border ${GAME_THEME.colors.msgMemoryBorder} ${GAME_THEME.colors.msgMemoryText} p-3 ${GAME_THEME.layout.radius} flex flex-col items-center gap-2 ${GAME_THEME.layout.shadowLg}`}>
+                            <div className={`text-xs font-bold uppercase tracking-widest ${GAME_THEME.colors.msgMemoryTitle}`}>Remember the schedule</div>
+                            <div className={`h-1.5 w-full ${GAME_THEME.colors.overlayBg} rounded-full overflow-hidden`}>
+                                <div className={`h-full ${GAME_THEME.colors.indicatorPulse} rounded-full animate-[width_3s_linear_forwards] w-full origin-left`} style={{ animationName: 'shrinkWidth' }} />
+                            </div>
+                            <style>{`@keyframes shrinkWidth { from { width: 100%; } to { width: 0%; } }`}</style>
+                        </div>
+                    </div>
+                )}
+
+                {/* Oh Shift Message */}
+                {startMessage && (
+                    <div className="absolute top-28 left-1/2 -translate-x-1/2 w-72 z-50 animate-in zoom-in slide-in-from-top-4 fade-in duration-300 pointer-events-none">
+                        <div className={`${GAME_THEME.colors.msgAlertBg} backdrop-blur-md border ${GAME_THEME.colors.msgAlertBorder} ${GAME_THEME.colors.msgAlertText} p-4 ${GAME_THEME.layout.radius} flex flex-col items-center gap-1 ${GAME_THEME.layout.shadowLg} text-center`}>
+                            <div className={`text-lg font-black uppercase italic tracking-tighter ${GAME_THEME.colors.msgAlertTitle}`}>Oh Shift!</div>
+                            <div className="text-xs font-bold uppercase tracking-widest opacity-80">You need to get the shifts back!</div>
+                        </div>
+                    </div>
+                )}
                 {/* Original Grid Container with Responsive Scale */}
                 <div className={`flex flex-col gap-4 p-4 md:p-8 ${GAME_THEME.colors.panelBg} backdrop-blur-sm ${GAME_THEME.layout.radiusLg || 'rounded-3xl'} border ${GAME_THEME.colors.panelBorder} ${GAME_THEME.layout.shadowLg} relative scale-[0.72] sm:scale-75 md:scale-100 origin-top -mb-32 sm:-mb-24 md:mb-0`}>
 
