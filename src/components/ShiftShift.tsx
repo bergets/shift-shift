@@ -97,7 +97,7 @@ interface ShiftShiftProps {
 }
 
 export default function ShiftShift({
-    playerName,
+
     onExit,
     isTutorial = false,
     onTutorialComplete,
@@ -520,8 +520,7 @@ export default function ShiftShift({
 
     if (grid.length === 0) return null;
 
-    const levelsUntilExpand = 3 - ((currentLevel - 1) % 3);
-    const completedSteps = 3 - levelsUntilExpand;
+
 
     return (
         <div className="flex flex-col items-center justify-center h-full w-full max-w-[100vw] overflow-hidden relative bg-[#F2F7F6]">
